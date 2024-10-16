@@ -190,7 +190,7 @@ int main() {
           }
           else if (pid == 0){
             execvp(arguments[0], arguments);
-            perror("execvp() failed");
+            perror("execvp() failed: No such file or directory");
             exit(EXIT_FAILURE);
           }
           else{

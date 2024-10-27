@@ -8,18 +8,47 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <time.h>
 
 #define MAX_COMMAND_LINE_LEN 1024
 #define MAX_COMMAND_LINE_ARGS 128
+#define TIMEOUT 10
+
 
 char prompt[] = "> ";
 char delimiters[] = " \t\r\n";
 extern char **environ;
+pid_t fpid = -1;  
+
+//signal handler CTRL-C
+void fproc_handler(int signum)
+{ 
+
+  if(fpid != -1){
+    kill(fpid,SIGINT);
+  }
+
+}
+
+// signal handler Alarm
+void lrproc_handler(int signum){
+
+  if(fpid != -1){
+    kill(fpid,SIGINT);
+  }
+
+}
 
 
 
 
 int main() {
+    // Register Signal handler for Ctrl-C
+    signal(SIGINT, fproc_handler); 
+
+    // Register Signal handler for Alarm
+    signal(SIGALRM, lrproc_handler);
+
     // Stores the string typed into the command line.
     char command_line[MAX_COMMAND_LINE_LEN];
     char cmd_bak[MAX_COMMAND_LINE_LEN];
@@ -30,12 +59,14 @@ int main() {
     // Stores current working directory
     char cwd[MAX_COMMAND_LINE_LEN];
     
-    int i, pid, status; 
+    int i, pid, status, background, pip, lthan, gthan; 
+
+    
 
 
     while (true) {
       
-        do{ 
+        do{  
             // Get cwd
             getcwd(cwd, sizeof(cwd));
             strcat(cwd, prompt);
@@ -64,7 +95,6 @@ int main() {
             return 0;
         }
 
-
         // Initialize the first command_line arg 
         i = 0;
         arguments[i] = strtok(command_line, delimiters);  
@@ -72,26 +102,27 @@ int main() {
 
         // Tokenize the remaining args of the command_line
         while (arguments[i] != NULL) {
+            printf("%s\n", arguments[i]);
             i++;
             arguments[i] = strtok(NULL, delimiters);
         }
         
-
-        // printf("Arg Count: %d\n", i);
-        // printf("Arg 0: %s\n", arguments[0]);   // debugging line for arg collection
+        // alarm(TIMEOUT);
 
         // STRCMP the first argument with built in commands 
 
   // B.I.C. exit...
 
         if(strcmp(arguments[0], "exit") == 0){
+
           exit(1);
         }
 
 
   // B.I.C. cd...
 
-        else if(strcmp(arguments[0], "cd") == 0){    
+        else if(strcmp(arguments[0], "cd") == 0){ 
+
           // if the given arg [0]=='$' then getenv
           if(arguments[1][0] == '$'){
             arguments[1] = getenv(arguments[1] + 1); 
@@ -105,11 +136,6 @@ int main() {
           
         }
 
-  // B.I.C. clear...
-        else if(strcmp(arguments[0], "clear") == 0){
-              // clear screen
-              system("clear");
-        }
   // B.I.C. pwd...
 
         else if(strcmp(arguments[0], "pwd") == 0){
@@ -150,6 +176,7 @@ int main() {
         }
 
   // B.I.C. echo...
+
         else if(strcmp(arguments[0], "echo") == 0){
           //  initialize parsing through arguments
           int k; 
@@ -173,7 +200,7 @@ int main() {
         else if(strcmp(arguments[0], "setenv") == 0){
         
         // Set a new environment variable or update if it exists (overwrite = 1)
-          if (setenv(arguments[1], arguments[2], 1) != 0) {
+          if (setenv((arguments[1] + 1), arguments[2], 1) != 0) {
               perror("setenv failed");
               return 1;
           }
@@ -181,60 +208,47 @@ int main() {
         }
 
   // Else not a B.I.C. fork off a child process and call exec function
+        
         else{
+
+          background = 0;   //Initializes bkgd process to wait in parent
+          pip = 0;
+          lthan = 0;
+          gthan =0; 
+          
+          if (strcmp(arguments[i-1], "&") == 0){
+            background = 1;
+            arguments[i - 1] = NULL; // Remove '&' from the arguments list
+          }
+
           pid = fork();
 
           if(pid < 0){
             printf("fork failed!");
             exit(-1);
           }
-          else if (pid == 0){
+          else if (pid > 0 && background == 0){   //parent waits for child process
+            fpid = pid;
+            alarm(TIMEOUT);
+
+            wait(&status);
+            fpid = -1;
+          }
+          else if (pid > 0 && background == 1)  {} //parent doesn't wait for child process
+          else{
+
+            //  reset signal to default for child
+            signal(SIGINT, SIG_DFL);
+            signal(SIGALRM, SIG_DFL);   
+
             execvp(arguments[0], arguments);
             perror("execvp() failed");
-            exit(EXIT_FAILURE);
-          }
-          else{
-            wait(&status);
+            exit(EXIT_FAILURE);            
           }
         }
-        // TODO:
-        // 
-        
-			  // Completed 0. Modify the prompt to print the current working directory
-        // Use getcwd to find cwd and strcat to combine with the prompt of shell
-			
-        // Completed 1. Tokenize the command line input (split it on whitespace)
-        // Use strtok takes the command_line and tokenizes it by the delimiters while it is not NULL
-      
-        // Completed 92% 2. Implement Built-In Commands
-        /*  
-            Completed cd: changes the current working directory
-            Completed pwd: prints the current working directory
-            Completed echo: prints a message and the values of environment variables
-            Completed exit: terminates the shell
-            Completed env: prints the current values of the environment variables
-            Semi-Completed setenv: sets an environment variable
-        */
-        
-        // 3. Create a child process which will execute the command line input
-
-  
-        // 4. The parent process should wait for the child to complete unless its a background process
-      
-      
-        // Hints (put these into Google):
-        // man fork
-        // man execvp
-        // man wait
-        // man strtok
-        // man environ
-        // man signals
-        
-        // Extra Credit
-        // man dup2
-        // man open
-        // man pipes
+        //  This resets the alarm for the completed process.
+        alarm(0);
     }
-    // This should never be reached.
+    // This will never be reached.
     return -1;
 }

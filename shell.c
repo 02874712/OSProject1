@@ -19,6 +19,7 @@ char prompt[] = "> ";
 char delimiters[] = " \t\r\n";
 extern char **environ;
 pid_t fpid = -1;  
+char cwd[MAX_COMMAND_LINE_LEN];
 
 //signal handler CTRL-C
 void fproc_handler(int signum)
@@ -26,6 +27,15 @@ void fproc_handler(int signum)
 
   if(fpid != -1){
     kill(fpid,SIGINT);
+  }
+  else{
+    // Get cwd
+    getcwd(cwd, sizeof(cwd));
+    strcat(cwd, prompt);
+
+    // Print the shell prompt.
+    printf("\n%s", cwd);
+    fflush(stdout);
   }
 
 }
@@ -51,13 +61,9 @@ int main() {
 
     // Stores the string typed into the command line.
     char command_line[MAX_COMMAND_LINE_LEN];
-    char cmd_bak[MAX_COMMAND_LINE_LEN];
   
     // Stores the tokenized command line input.
     char *arguments[MAX_COMMAND_LINE_ARGS];
-
-    // Stores current working directory
-    char cwd[MAX_COMMAND_LINE_LEN];
     
     int i, pid, status, background, pip, lthan, gthan; 
 
@@ -102,7 +108,6 @@ int main() {
 
         // Tokenize the remaining args of the command_line
         while (arguments[i] != NULL) {
-            printf("%s\n", arguments[i]);
             i++;
             arguments[i] = strtok(NULL, delimiters);
         }
